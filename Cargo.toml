@@ -1,0 +1,3 @@
+[workspace]
+members = ["swade-core", "swade-gui/src-tauri"]
+resolver = "2"

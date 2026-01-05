@@ -1,0 +1,56 @@
+SWADE Database Table Dump
+=========================
+Version: v001
+Timestamp: 20260104_155950
+Date: Sun Jan  4 15:59:50 PST 2026
+Tables Dumped: 47
+Database: ./swade.db
+
+Tables:
+  - ammunition_stats
+  - ancestries
+  - ancestry_choice_options
+  - ancestry_choices
+  - ancestry_modifiers
+  - ancestry_requirements
+  - arcane_background_choice_options
+  - arcane_background_choices
+  - arcane_background_requirements
+  - arcane_backgrounds
+  - armor_stats
+  - attributes
+  - character_advances
+  - character_ancestry_choices
+  - character_arcane_background_choices
+  - character_arcane_backgrounds
+  - character_attributes
+  - character_edges
+  - character_gear
+  - character_hindrances
+  - character_modifiers
+  - character_notes
+  - character_powers
+  - character_skills
+  - characters
+  - edge_modifiers
+  - edge_requirements
+  - edges
+  - gear
+  - gear_categories
+  - gear_modifiers
+  - gear_requirements
+  - hindrance_modifiers
+  - hindrance_requirements
+  - hindrances
+  - modifiers
+  - pack_contents
+  - poison_stats
+  - power_modifiers
+  - power_requirements
+  - powers
+  - ranks
+  - requirement_expressions
+  - requirements
+  - shield_stats
+  - skills
+  - weapon_stats

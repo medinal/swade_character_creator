@@ -1,0 +1,25 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.idea_modules/
+
+# Claude Code
+.claude/
+
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+.env.local
+
+# Repo-specific SSH key
+.ssh/

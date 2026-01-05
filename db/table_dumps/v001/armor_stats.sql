@@ -1,0 +1,44 @@
+PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE armor_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    gear_id INTEGER NOT NULL UNIQUE,
+    armor_value INTEGER NOT NULL, -- Armor bonus to Toughness
+    coverage VARCHAR(50) NOT NULL, -- Body parts covered: "torso", "torso, arms", "head", etc.
+    min_strength INTEGER, -- Minimum strength die size
+    is_heavy BOOLEAN NOT NULL DEFAULT 0, -- Heavy armor flag
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (gear_id) REFERENCES gear(id) ON DELETE CASCADE
+);
+INSERT INTO armor_stats VALUES(1,71,1,'Torso, Arms, Legs',NULL,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(2,72,3,'Torso, Arms',6,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(3,73,3,'Torso, Arms, Legs',8,1,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(4,74,4,'Torso',6,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(5,75,3,'Arms',6,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(6,76,3,'Legs',6,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(7,77,4,'Head',NULL,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(8,78,2,'Torso',NULL,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(9,79,4,'Torso, Arms, Legs',8,1,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(10,80,10,'Head, Torso, Arms, Legs',10,1,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(11,81,3,'Head',NULL,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(12,82,4,'Head',NULL,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(13,83,2,'Torso',NULL,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(14,84,4,'Torso, Arms',6,0,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(15,85,6,'Torso, Arms, Legs',8,1,'2025-12-30 18:25:49','2025-12-30 18:25:49');
+INSERT INTO armor_stats VALUES(16,236,1,'torso, head',4,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(17,237,1,'legs',4,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(18,238,1,'torso, arms',4,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(19,239,1,'torso, arms, head',4,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(20,240,2,'torso, arms',6,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(21,241,2,'legs',6,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(22,242,2,'head',6,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(23,243,3,'torso, arms',8,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(24,244,3,'legs',8,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(25,245,3,'head',8,0,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(26,246,4,'torso',10,1,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(27,247,4,'legs',10,1,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(28,248,4,'arms',10,1,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(29,249,4,'head',10,1,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+INSERT INTO armor_stats VALUES(30,250,4,'head',10,1,'2026-01-04 23:33:12','2026-01-04 23:33:12');
+COMMIT;
