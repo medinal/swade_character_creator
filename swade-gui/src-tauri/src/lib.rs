@@ -79,6 +79,9 @@ use commands::{
     take_hindrance_advance,
     undo_last_advance,
     get_advancement_history,
+    // Types (for TypeScript bindings)
+    DraftResult,
+    ValidationWarning,
 };
 use state::AppState;
 

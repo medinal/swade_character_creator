@@ -8,14 +8,19 @@ use tauri::State;
 use crate::error::{CommandError, CommandResult};
 use crate::state::{available_hindrance_points, lock_state, remove_invalid_edges, AppState};
 
+use super::types::{DraftResult, ValidationWarning};
+
 #[tauri::command]
 #[specta::specta]
 pub fn update_draft_attribute(
     attribute_id: i64,
     increment: bool,
+    bypass_validation: Option<bool>,
     state: State<Mutex<AppState>>,
-) -> CommandResult<CharacterView> {
+) -> CommandResult<DraftResult> {
     let mut state = lock_state(&state)?;
+    let bypass = bypass_validation.unwrap_or(false);
+    let mut warnings = Vec::new();
 
     let draft = state.draft_mut()?;
 
@@ -31,39 +36,60 @@ pub fn update_draft_attribute(
         let total_available =
             draft.attribute_points_earned + draft.hindrance_points_to_attributes;
         if draft.attribute_points_spent >= total_available {
-            return Err(CommandError::Validation("No attribute points available".to_string()));
+            if bypass {
+                warnings.push(ValidationWarning::point_limit_exceeded(
+                    "No attribute points available".to_string(),
+                ));
+            } else {
+                return Err(CommandError::Validation("No attribute points available".to_string()));
+            }
         }
 
         // Check if already at max (d12 is the purchasable max)
         if attr_value.die.size() == 12 {
-            return Err(CommandError::Validation("Attribute already at maximum".to_string()));
+            if bypass {
+                warnings.push(ValidationWarning::point_limit_exceeded(
+                    "Attribute already at maximum (d12)".to_string(),
+                ));
+            } else {
+                return Err(CommandError::Validation("Attribute already at maximum".to_string()));
+            }
+        } else {
+            // Increment the die
+            attr_value.die = attr_value.die.increment();
+            draft.attribute_points_spent += 1;
         }
-
-        // Increment the die
-        attr_value.die = attr_value.die.increment();
-        draft.attribute_points_spent += 1;
     } else {
         // Decrement - check if at base
         if attr_value.die == attr_value.attribute.base_die {
-            return Err(CommandError::Validation("Attribute already at base value".to_string()));
+            if bypass {
+                warnings.push(ValidationWarning::point_limit_exceeded(
+                    "Attribute already at base value".to_string(),
+                ));
+            } else {
+                return Err(CommandError::Validation("Attribute already at base value".to_string()));
+            }
+        } else {
+            // Decrement the die
+            attr_value.die = attr_value
+                .die
+                .decrement()
+                .ok_or_else(|| CommandError::Validation("Cannot decrement below d4".to_string()))?;
+            draft.attribute_points_spent -= 1;
+
+            // Recompute effective values and remove edges that no longer meet requirements
+            // (only if not bypassing validation)
+            if !bypass {
+                draft.compute_effective_values();
+                remove_invalid_edges(draft);
+            }
         }
-
-        // Decrement the die
-        attr_value.die = attr_value
-            .die
-            .decrement()
-            .ok_or_else(|| CommandError::Validation("Cannot decrement below d4".to_string()))?;
-        draft.attribute_points_spent -= 1;
-
-        // Recompute effective values and remove edges that no longer meet requirements
-        draft.compute_effective_values();
-        remove_invalid_edges(draft);
     }
 
     // Recompute effective values after the change
     draft.compute_effective_values();
 
-    Ok(draft.clone())
+    Ok(DraftResult::with_warnings(draft.clone(), warnings))
 }
 
 #[tauri::command]

@@ -78,9 +78,9 @@
     saving = true;
     error = null;
 
-    const result = await commands.updateDraftAttribute(attributeId, true);
+    const result = await commands.updateDraftAttribute(attributeId, true, null);
     if (result.status === "ok") {
-      character = result.data;
+      character = result.data.character;
     } else {
       error = result.error.message;
     }
@@ -106,9 +106,9 @@
     saving = true;
     error = null;
 
-    const result = await commands.updateDraftAttribute(attributeId, false);
+    const result = await commands.updateDraftAttribute(attributeId, false, null);
     if (result.status === "ok") {
-      character = result.data;
+      character = result.data.character;
     } else {
       error = result.error.message;
     }

@@ -10,6 +10,7 @@ pub mod hindrances;
 pub mod notes;
 pub mod powers;
 pub mod skills;
+pub mod types;
 
 // Re-export all commands for convenient access
 pub use advancement::*;
@@ -22,3 +23,4 @@ pub use hindrances::*;
 pub use notes::*;
 pub use powers::*;
 pub use skills::*;
+pub use types::*;

@@ -151,9 +151,9 @@
     saving = true;
     error = null;
 
-    const result = await commands.addDraftHindrance(hindrance.id);
+    const result = await commands.addDraftHindrance(hindrance.id, null);
     if (result.status === "ok") {
-      character = result.data;
+      character = result.data.character;
     } else {
       error = result.error.message;
     }

@@ -9,6 +9,8 @@ use tauri::State;
 use crate::error::{CommandError, CommandResult};
 use crate::state::{available_hindrance_points, clear_arcane_backgrounds, lock_state, AppState};
 
+use super::types::{DraftResult, ValidationWarning};
+
 /// Edge with its availability status for the current character.
 #[derive(serde::Serialize, specta::Type)]
 pub struct EdgeWithAvailability {
@@ -62,10 +64,13 @@ pub fn get_edges(state: State<Mutex<AppState>>) -> CommandResult<Vec<EdgeWithAva
 pub fn add_draft_edge(
     edge_id: i64,
     notes: Option<String>,
+    bypass_validation: Option<bool>,
     state: State<Mutex<AppState>>,
-) -> CommandResult<CharacterView> {
+) -> CommandResult<DraftResult> {
     let mut state = lock_state(&state)?;
     let conn = state.connection()?;
+    let bypass = bypass_validation.unwrap_or(false);
+    let mut warnings = Vec::new();
 
     let draft = state.draft_mut()?;
 
@@ -82,7 +87,14 @@ pub fn add_draft_edge(
     // Check requirements
     let ctx = draft.to_requirement_context();
     if !edge.requirements.evaluate(&ctx) {
-        return Err(CommandError::Validation("Character does not meet edge requirements".to_string()));
+        if bypass {
+            warnings.push(ValidationWarning::requirement_not_met(format!(
+                "Edge '{}' requirements not met",
+                edge.name
+            )));
+        } else {
+            return Err(CommandError::Validation("Character does not meet edge requirements".to_string()));
+        }
     }
 
     // If edge can be taken multiple times, notes are required
@@ -101,10 +113,16 @@ pub fn add_draft_edge(
     let points_available_for_edges = draft.hindrance_points_to_edges - points_spent_on_edges;
 
     if points_available_for_edges < 2 {
-        return Err(CommandError::Validation(
-            "Not enough hindrance points allocated to edges. Allocate more points first."
-                .to_string(),
-        ));
+        if bypass {
+            warnings.push(ValidationWarning::point_limit_exceeded(
+                "Not enough hindrance points allocated to edges".to_string(),
+            ));
+        } else {
+            return Err(CommandError::Validation(
+                "Not enough hindrance points allocated to edges. Allocate more points first."
+                    .to_string(),
+            ));
+        }
     }
 
     // Apply wealth modifiers from the edge (e.g., Rich, Filthy Rich)
@@ -134,7 +152,7 @@ pub fn add_draft_edge(
     // Recompute effective values (edges can have die modifiers)
     draft.compute_effective_values();
 
-    Ok(draft.clone())
+    Ok(DraftResult::with_warnings(draft.clone(), warnings))
 }
 
 #[tauri::command]

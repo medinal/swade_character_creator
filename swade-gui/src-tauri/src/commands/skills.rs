@@ -8,6 +8,8 @@ use tauri::State;
 use crate::error::{CommandError, CommandResult};
 use crate::state::{available_hindrance_points, lock_state, remove_invalid_edges, AppState};
 
+use super::types::{DraftResult, ValidationWarning};
+
 #[tauri::command]
 #[specta::specta]
 pub fn get_skills(state: State<Mutex<AppState>>) -> CommandResult<Vec<SkillView>> {
@@ -27,9 +29,12 @@ pub fn get_game_config() -> GameConfig {
 pub fn update_draft_skill(
     skill_id: i64,
     increment: bool,
+    bypass_validation: Option<bool>,
     state: State<Mutex<AppState>>,
-) -> CommandResult<CharacterView> {
+) -> CommandResult<DraftResult> {
     let mut state = lock_state(&state)?;
+    let bypass = bypass_validation.unwrap_or(false);
+    let mut warnings = Vec::new();
 
     let draft = state.draft_mut()?;
 
@@ -69,19 +74,32 @@ pub fn update_draft_skill(
         // Check if we have points available
         let total_available = draft.skill_points_earned + draft.hindrance_points_to_skills;
         if draft.skill_points_spent + cost > total_available {
-            return Err(CommandError::Validation("Not enough skill points".to_string()));
+            if bypass {
+                warnings.push(ValidationWarning::point_limit_exceeded(
+                    "Not enough skill points".to_string(),
+                ));
+            } else {
+                return Err(CommandError::Validation("Not enough skill points".to_string()));
+            }
         }
 
         // Check max die
-        if let Some(current) = skill_value.die {
-            if current >= skill_value.skill.max_die {
+        let at_max = skill_value.die.map_or(false, |d| d >= skill_value.skill.max_die);
+        if at_max {
+            if bypass {
+                warnings.push(ValidationWarning::point_limit_exceeded(
+                    "Skill already at maximum".to_string(),
+                ));
+            } else {
                 return Err(CommandError::Validation("Skill already at maximum".to_string()));
             }
         }
 
-        // Increment the die
-        skill_value.die = Some(next_die);
-        draft.skill_points_spent += cost;
+        if !at_max {
+            // Increment the die
+            skill_value.die = Some(next_die);
+            draft.skill_points_spent += cost;
+        }
     } else {
         // Decrement
         let current_die = skill_value
@@ -90,7 +108,16 @@ pub fn update_draft_skill(
 
         // Core skills cannot go below d4
         if skill_value.skill.is_core_skill && current_die == swade_core::views::Die::d4() {
-            return Err(CommandError::Validation("Core skills cannot go below d4".to_string()));
+            if bypass {
+                warnings.push(ValidationWarning::point_limit_exceeded(
+                    "Core skills cannot go below d4".to_string(),
+                ));
+                // Don't decrement, just return with warning
+                draft.compute_effective_values();
+                return Ok(DraftResult::with_warnings(draft.clone(), warnings));
+            } else {
+                return Err(CommandError::Validation("Core skills cannot go below d4".to_string()));
+            }
         }
 
         // Calculate refund based on what the cost was to reach current die
@@ -108,14 +135,17 @@ pub fn update_draft_skill(
         }
 
         // Recompute effective values and remove edges that no longer meet requirements
-        draft.compute_effective_values();
-        remove_invalid_edges(draft);
+        // (only if not bypassing validation)
+        if !bypass {
+            draft.compute_effective_values();
+            remove_invalid_edges(draft);
+        }
     }
 
     // Recompute effective values after the change
     draft.compute_effective_values();
 
-    Ok(draft.clone())
+    Ok(DraftResult::with_warnings(draft.clone(), warnings))
 }
 
 #[tauri::command]

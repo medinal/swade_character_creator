@@ -179,9 +179,9 @@
     saving = true;
     error = null;
 
-    const result = await commands.addDraftArcaneBackground(abId);
+    const result = await commands.addDraftArcaneBackground(abId, null);
     if (result.status === "ok") {
-      character = result.data;
+      character = result.data.character;
       // Refresh powers to update availability
       const powersResult = await commands.getPowers();
       if (powersResult.status === "ok") {
@@ -215,9 +215,9 @@
     saving = true;
     error = null;
 
-    const result = await commands.addDraftPower(powerId);
+    const result = await commands.addDraftPower(powerId, null);
     if (result.status === "ok") {
-      character = result.data;
+      character = result.data.character;
     } else {
       error = result.error.message;
     }

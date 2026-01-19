@@ -87,9 +87,9 @@
     saving = true;
     error = null;
 
-    const result = await commands.updateDraftSkill(skillId, true);
+    const result = await commands.updateDraftSkill(skillId, true, null);
     if (result.status === "ok") {
-      character = result.data;
+      character = result.data.character;
     } else {
       error = result.error.message;
     }
@@ -115,9 +115,9 @@
     saving = true;
     error = null;
 
-    const result = await commands.updateDraftSkill(skillId, false);
+    const result = await commands.updateDraftSkill(skillId, false, null);
     if (result.status === "ok") {
-      character = result.data;
+      character = result.data.character;
     } else {
       error = result.error.message;
     }

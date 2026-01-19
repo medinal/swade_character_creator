@@ -15,11 +15,49 @@
   import GearBrowserModal from "$lib/components/GearBrowserModal.svelte";
   import PortraitUpload from "$lib/components/PortraitUpload.svelte";
   import ConfirmDeleteModal from "$lib/components/ConfirmDeleteModal.svelte";
+  import EdgeBrowserModal from "$lib/components/EdgeBrowserModal.svelte";
+  import HindranceBrowserModal from "$lib/components/HindranceBrowserModal.svelte";
+  import PowerBrowserModal from "$lib/components/PowerBrowserModal.svelte";
+  import AncestryBrowserModal from "$lib/components/AncestryBrowserModal.svelte";
 
   let character = $state<CharacterView | null>(null);
   let showDeleteConfirm = $state(false);
   let loading = $state(true);
   let error = $state<string | null>(null);
+
+  // Edit mode state
+  let editMode = $state(false);
+  let draftCharacter = $state<CharacterView | null>(null);
+  let editSaving = $state(false);
+
+  // Toast notifications for validation warnings
+  interface Toast {
+    id: number;
+    message: string;
+  }
+  let toasts = $state<Toast[]>([]);
+  let toastIdCounter = 0;
+
+  function showToast(message: string) {
+    const id = ++toastIdCounter;
+    toasts = [...toasts, { id, message }];
+    setTimeout(() => {
+      toasts = toasts.filter(t => t.id !== id);
+    }, 3000);
+  }
+
+  function showWarnings(warnings: string[]) {
+    warnings.forEach(w => showToast(w));
+  }
+
+  // Edit mode modal states
+  let edgeBrowserOpen = $state(false);
+  let hindranceBrowserOpen = $state(false);
+  let powerBrowserOpen = $state(false);
+  let ancestryBrowserOpen = $state(false);
+
+  // Display character (use draft in edit mode, actual character otherwise)
+  let displayCharacter = $derived(editMode ? draftCharacter : character);
 
   onMount(async () => {
     const id = parseInt($page.params.id ?? "");
@@ -80,20 +118,20 @@
 
   // Get all skills sorted alphabetically with attribute lookup
   let sortedSkills = $derived(
-    [...(character?.skills ?? [])]
+    [...(displayCharacter?.skills ?? [])]
       .filter(s => !hideUntrainedSkills || s.die !== null)
       .sort((a, b) => a.skill.name.localeCompare(b.skill.name))
   );
 
   // Get attribute name by ID
   function getAttributeName(attrId: number): string {
-    const attr = character?.attributes.find(a => a.attribute.id === attrId);
+    const attr = displayCharacter?.attributes.find(a => a.attribute.id === attrId);
     return attr?.attribute.name ?? "";
   }
 
   // Helper to get modifiers for display - wraps the utility function
   function getModifiers(targetType: string, targetIdentifier: string): ModifierWithSource[] {
-    return getModifiersFor(character, targetType, targetIdentifier);
+    return getModifiersFor(displayCharacter, targetType, targetIdentifier);
   }
 
   function handleBack() {
@@ -109,6 +147,110 @@
       error = typeof result.error === "string" ? result.error : result.error.message;
       showDeleteConfirm = false;
     }
+  }
+
+  // Edit Mode Functions
+  async function enterEditMode() {
+    if (!character) return;
+    editSaving = true;
+
+    // Load character into draft system
+    const result = await commands.loadCharacterIntoDraft(character.id);
+    if (result.status === "ok") {
+      draftCharacter = result.data;
+      editMode = true;
+      toasts = [];
+    } else {
+      error = result.error.message;
+    }
+    editSaving = false;
+  }
+
+  async function saveAndExitEditMode() {
+    editSaving = true;
+
+    const result = await commands.saveCharacter();
+    if (result.status === "ok") {
+      character = result.data; // Update displayed character
+      editMode = false;
+      draftCharacter = null;
+      toasts = [];
+    } else {
+      error = result.error.message;
+    }
+    editSaving = false;
+  }
+
+  function discardAndExitEditMode() {
+    commands.discardDraft();
+    editMode = false;
+    draftCharacter = null;
+    toasts = [];
+  }
+
+  function handleEditModeCharacterChanged(newCharacter: CharacterView, warnings: string[]) {
+    draftCharacter = newCharacter;
+    if (warnings.length > 0) {
+      showWarnings(warnings);
+    }
+  }
+
+  // Inline attribute +/- in edit mode
+  async function incrementAttribute(attributeId: number) {
+    editSaving = true;
+    const result = await commands.updateDraftAttribute(attributeId, true, true); // bypass=true
+    if (result.status === "ok") {
+      draftCharacter = result.data.character;
+      if (result.data.warnings.length > 0) {
+        showWarnings(result.data.warnings.map(w => w.message));
+      }
+    } else {
+      error = result.error.message;
+    }
+    editSaving = false;
+  }
+
+  async function decrementAttribute(attributeId: number) {
+    editSaving = true;
+    const result = await commands.updateDraftAttribute(attributeId, false, true); // bypass=true
+    if (result.status === "ok") {
+      draftCharacter = result.data.character;
+      if (result.data.warnings.length > 0) {
+        showWarnings(result.data.warnings.map(w => w.message));
+      }
+    } else {
+      error = result.error.message;
+    }
+    editSaving = false;
+  }
+
+  // Inline skill +/- in edit mode
+  async function incrementSkill(skillId: number) {
+    editSaving = true;
+    const result = await commands.updateDraftSkill(skillId, true, true); // bypass=true
+    if (result.status === "ok") {
+      draftCharacter = result.data.character;
+      if (result.data.warnings.length > 0) {
+        showWarnings(result.data.warnings.map(w => w.message));
+      }
+    } else {
+      error = result.error.message;
+    }
+    editSaving = false;
+  }
+
+  async function decrementSkill(skillId: number) {
+    editSaving = true;
+    const result = await commands.updateDraftSkill(skillId, false, true); // bypass=true
+    if (result.status === "ok") {
+      draftCharacter = result.data.character;
+      if (result.data.warnings.length > 0) {
+        showWarnings(result.data.warnings.map(w => w.message));
+      }
+    } else {
+      error = result.error.message;
+    }
+    editSaving = false;
   }
 
   let editing = $state(false);
@@ -130,6 +272,15 @@
 
   // Gear modal state
   let gearBrowserOpen = $state(false);
+
+  // Edit dropdown and confirmation modal
+  let editDropdownOpen = $state(false);
+  let showAdvancedEditConfirm = $state(false);
+
+  function handleAdvancedEditConfirm() {
+    showAdvancedEditConfirm = false;
+    enterEditMode();
+  }
 
   // Calculate total power points (base from character + bonus from edges like "Power Points")
   let basePowerPoints = $derived(character?.power_points ?? 0);
@@ -331,40 +482,129 @@
         </h1>
       </div>
       <div class="flex items-center gap-3">
-        <button
-          onclick={() => advancementModalOpen = true}
-          disabled={!character}
-          class="bg-green-600 hover:bg-green-500 disabled:bg-green-400 text-white text-sm font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-          </svg>
-          Advance
-        </button>
-        <button
-          onclick={handleEdit}
-          disabled={editing || !character}
-          class="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white text-sm font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-          {editing ? "Loading..." : "Edit"}
-        </button>
-        <button
-          onclick={() => showDeleteConfirm = true}
-          class="bg-red-600 hover:bg-red-500 text-white text-sm font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-          Delete
-        </button>
+        {#if editMode}
+          <button
+            onclick={saveAndExitEditMode}
+            disabled={editSaving}
+            class="bg-green-600 hover:bg-green-500 disabled:bg-green-400 text-white text-sm font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            {editSaving ? "Saving..." : "Save Changes"}
+          </button>
+          <button
+            onclick={discardAndExitEditMode}
+            disabled={editSaving}
+            class="bg-zinc-200 hover:bg-zinc-300 disabled:bg-zinc-100 text-zinc-700 dark:bg-zinc-700 dark:hover:bg-zinc-600 dark:text-zinc-300 text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
+          >
+            Discard
+          </button>
+        {:else}
+          <!-- Edit Dropdown -->
+          <div class="relative">
+            <button
+              onclick={() => editDropdownOpen = !editDropdownOpen}
+              disabled={!character || editing || editSaving}
+              class="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-400 text-white text-sm font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {#if editDropdownOpen}
+              <!-- Backdrop to close dropdown -->
+              <button
+                class="fixed inset-0 z-40"
+                onclick={() => editDropdownOpen = false}
+                aria-label="Close menu"
+              ></button>
+
+              <!-- Dropdown menu -->
+              <div class="absolute right-0 mt-1 w-48 bg-white dark:bg-zinc-800 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-700 py-1 z-50">
+                <button
+                  onclick={() => { editDropdownOpen = false; advancementModalOpen = true; }}
+                  class="w-full text-left px-4 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+                >
+                  <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                  </svg>
+                  Advancement
+                </button>
+                <button
+                  onclick={() => { editDropdownOpen = false; handleEdit(); }}
+                  disabled={editing}
+                  class="w-full text-left px-4 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  Wizard
+                </button>
+                <div class="border-t border-zinc-200 dark:border-zinc-700 my-1"></div>
+                <button
+                  onclick={() => { editDropdownOpen = false; showAdvancedEditConfirm = true; }}
+                  disabled={editSaving}
+                  class="w-full text-left px-4 py-2 text-sm text-amber-600 dark:text-amber-400 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  Advanced Editing
+                </button>
+              </div>
+            {/if}
+          </div>
+          <button
+            onclick={() => showDeleteConfirm = true}
+            class="bg-red-600 hover:bg-red-500 text-white text-sm font-medium px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
+        {/if}
       </div>
     </div>
   </header>
 
   <main class="max-w-6xl mx-auto px-6 py-6">
+    {#if editMode}
+      <div class="bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 p-3 rounded-md mb-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <span class="font-medium text-amber-800 dark:text-amber-400">Edit Mode Active</span>
+          </div>
+          <span class="text-sm text-amber-700 dark:text-amber-300">Changes will not be saved until you click "Save Changes"</span>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Floating Toast Notifications -->
+    {#if toasts.length > 0}
+      <div class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+        {#each toasts as toast (toast.id)}
+          <div
+            class="bg-amber-500 text-white px-4 py-3 rounded-lg shadow-lg animate-fade-in flex items-center gap-2"
+          >
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span class="text-sm font-medium">{toast.message}</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
     {#if loading}
       <div class="text-zinc-500 text-sm">Loading character...</div>
     {:else if error}
@@ -396,21 +636,21 @@
           <div class="flex gap-4">
             <div class="text-center group relative cursor-help">
               <div class="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1">Pace</div>
-              <div class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{character.derived_stats.pace}</div>
+              <div class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{displayCharacter?.derived_stats.pace ?? 0}</div>
               <span class="tooltip">
                 How many inches (tabletop) the character moves per round. Running adds a d6.
               </span>
             </div>
             <div class="text-center group relative cursor-help">
               <div class="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1">Parry</div>
-              <div class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{character.derived_stats.parry}</div>
+              <div class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{displayCharacter?.derived_stats.parry ?? 0}</div>
               <span class="tooltip">
                 Target number to hit in melee combat. Equal to 2 + half Fighting die.
               </span>
             </div>
             <div class="text-center group relative cursor-help">
               <div class="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1">Toughness</div>
-              <div class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{character.derived_stats.toughness}</div>
+              <div class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{displayCharacter?.derived_stats.toughness ?? 0}</div>
               <span class="tooltip">
                 How much damage the character can take. Equal to 2 + half Vigor die (+ armor).
               </span>
@@ -443,42 +683,52 @@
         </div>
 
         <!-- Ancestry -->
-        {#if character.ancestry}
+        {#if displayCharacter?.ancestry || editMode}
           <div class="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-700">
-            <button
-              class="w-full flex items-center justify-between text-left"
-              onclick={() => ancestryExpanded = !ancestryExpanded}
-            >
-              <div>
-                <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">Ancestry:</span>
-                <span class="text-sm text-zinc-600 dark:text-zinc-400 ml-1">{character.ancestry.name}</span>
-              </div>
-              <svg
-                class="w-4 h-4 text-zinc-500 transition-transform {ancestryExpanded ? 'rotate-180' : ''}"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
+            <div class="flex items-center justify-between">
+              <button
+                class="flex-1 flex items-center justify-between text-left"
+                onclick={() => ancestryExpanded = !ancestryExpanded}
               >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+                <div>
+                  <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">Ancestry:</span>
+                  <span class="text-sm text-zinc-600 dark:text-zinc-400 ml-1">{displayCharacter?.ancestry?.name ?? "None"}</span>
+                </div>
+                <svg
+                  class="w-4 h-4 text-zinc-500 transition-transform {ancestryExpanded ? 'rotate-180' : ''}"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {#if editMode}
+                <button
+                  onclick={() => ancestryBrowserOpen = true}
+                  class="ml-2 px-2 py-1 text-xs font-medium text-amber-600 hover:text-amber-500 dark:text-amber-400"
+                >
+                  Change
+                </button>
+              {/if}
+            </div>
 
-            {#if ancestryExpanded}
+            {#if ancestryExpanded && displayCharacter?.ancestry}
               <div class="mt-3 space-y-3">
                 <!-- Description -->
                 <p class="text-sm text-zinc-600 dark:text-zinc-400">
-                  {character.ancestry.description}
+                  {displayCharacter.ancestry.description}
                 </p>
 
                 <!-- Racial Abilities (Modifiers) -->
-                {#if character.ancestry.modifiers.length > 0}
+                {#if displayCharacter.ancestry.modifiers.length > 0}
                   <div>
                     <h4 class="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
                       Racial Abilities
                     </h4>
                     <ul class="space-y-1">
-                      {#each character.ancestry.modifiers as mod}
+                      {#each displayCharacter.ancestry.modifiers as mod}
                         <li class="text-sm text-zinc-600 dark:text-zinc-400 flex items-start gap-2">
                           <span class="text-zinc-400 dark:text-zinc-500">•</span>
                           <span>{formatModifierDescription(mod)}</span>
@@ -489,13 +739,13 @@
                 {/if}
 
                 <!-- Ancestry Choices Made -->
-                {#if character.ancestry_choices.length > 0}
+                {#if (displayCharacter?.ancestry_choices.length ?? 0) > 0}
                   <div>
                     <h4 class="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">
                       Ancestry Choices
                     </h4>
                     <ul class="space-y-1">
-                      {#each character.ancestry_choices as choiceValue}
+                      {#each displayCharacter?.ancestry_choices ?? [] as choiceValue}
                         <li class="text-sm text-zinc-600 dark:text-zinc-400 flex items-start gap-2">
                           <span class="text-zinc-400 dark:text-zinc-500">•</span>
                           <span>
@@ -543,14 +793,42 @@
               Attributes
             </h3>
             <div class="space-y-3">
-              {#each character.attributes as attrValue}
+              {#each displayCharacter?.attributes ?? [] as attrValue}
                 {@const hasModifier = !diceEqual(attrValue.die, attrValue.effective_die)}
                 {@const modifiers = hasModifier ? getModifiers("attribute", attrValue.attribute.name) : []}
                 <div class="group relative flex items-center justify-between cursor-help">
                   <span class="font-medium text-zinc-700 dark:text-zinc-300">{attrValue.attribute.name}</span>
-                  <span class="font-mono font-bold text-lg {hasModifier ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-900 dark:text-zinc-100'}">
-                    {formatDie(attrValue.effective_die)}
-                  </span>
+                  {#if editMode}
+                    <div class="flex items-center gap-1">
+                      <button
+                        onclick={() => decrementAttribute(attrValue.attribute.id)}
+                        disabled={editSaving}
+                        class="w-6 h-6 flex items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Decrease {attrValue.attribute.name}"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <span class="font-mono font-bold text-lg w-10 text-center {hasModifier ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-900 dark:text-zinc-100'}">
+                        {formatDie(attrValue.effective_die)}
+                      </span>
+                      <button
+                        onclick={() => incrementAttribute(attrValue.attribute.id)}
+                        disabled={editSaving}
+                        class="w-6 h-6 flex items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Increase {attrValue.attribute.name}"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    </div>
+                  {:else}
+                    <span class="font-mono font-bold text-lg {hasModifier ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-900 dark:text-zinc-100'}">
+                      {formatDie(attrValue.effective_die)}
+                    </span>
+                  {/if}
                   <span class="tooltip">
                     {attrValue.attribute.description}
                     {#if hasModifier}
@@ -593,9 +871,37 @@
                       <span class="text-xs text-blue-500">*</span>
                     {/if}
                   </span>
-                  <span class="font-mono text-sm font-medium {hasSkillModifier ? 'text-blue-600 dark:text-blue-400' : skillValue.die ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400 dark:text-zinc-600'}">
-                    {formatDie(skillValue.effective_die ?? skillValue.die, true)}
-                  </span>
+                  {#if editMode}
+                    <div class="flex items-center gap-0.5">
+                      <button
+                        onclick={() => decrementSkill(skillValue.skill.id)}
+                        disabled={editSaving}
+                        class="w-5 h-5 flex items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Decrease {skillValue.skill.name}"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                        </svg>
+                      </button>
+                      <span class="font-mono text-sm font-medium w-10 text-center {hasSkillModifier ? 'text-blue-600 dark:text-blue-400' : skillValue.die ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400 dark:text-zinc-600'}">
+                        {formatDie(skillValue.effective_die ?? skillValue.die, true)}
+                      </span>
+                      <button
+                        onclick={() => incrementSkill(skillValue.skill.id)}
+                        disabled={editSaving}
+                        class="w-5 h-5 flex items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Increase {skillValue.skill.name}"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </button>
+                    </div>
+                  {:else}
+                    <span class="font-mono text-sm font-medium {hasSkillModifier ? 'text-blue-600 dark:text-blue-400' : skillValue.die ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400 dark:text-zinc-600'}">
+                      {formatDie(skillValue.effective_die ?? skillValue.die, true)}
+                    </span>
+                  {/if}
                   <span class="tooltip">
                     {skillValue.skill.description}
                     {#if hasSkillModifier}
@@ -618,12 +924,22 @@
         <div class="space-y-6">
           <!-- Hindrances -->
           <div class="bg-white dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 p-5">
-            <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide mb-4">
-              Hindrances
-            </h3>
-            {#if character.hindrances.length > 0}
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+                Hindrances
+              </h3>
+              {#if editMode}
+                <button
+                  onclick={() => hindranceBrowserOpen = true}
+                  class="px-2 py-1 text-xs font-medium text-amber-600 hover:text-amber-500 dark:text-amber-400"
+                >
+                  Edit
+                </button>
+              {/if}
+            </div>
+            {#if (displayCharacter?.hindrances.length ?? 0) > 0}
               <div class="space-y-2">
-                {#each character.hindrances as h}
+                {#each displayCharacter?.hindrances ?? [] as h}
                   <div class="group relative flex items-start gap-2 cursor-help">
                     <span class="flex-shrink-0 px-1.5 py-0.5 text-xs rounded {h.hindrance.severity === 'major'
                       ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'
@@ -649,15 +965,25 @@
 
           <!-- Edges -->
           <div class="bg-white dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 p-5">
-            <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide mb-4">
-              Edges
-            </h3>
-            {#if character.edges.length > 0}
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+                Edges
+              </h3>
+              {#if editMode}
+                <button
+                  onclick={() => edgeBrowserOpen = true}
+                  class="px-2 py-1 text-xs font-medium text-amber-600 hover:text-amber-500 dark:text-amber-400"
+                >
+                  Edit
+                </button>
+              {/if}
+            </div>
+            {#if (displayCharacter?.edges.length ?? 0) > 0}
               <div class="space-y-2">
-                {#each character.edges as e}
+                {#each displayCharacter?.edges ?? [] as e}
                   <div class="group relative flex items-start gap-2 cursor-help">
                     <span class="flex-shrink-0 w-5 h-5 rounded bg-zinc-100 dark:bg-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center justify-center">
-                      {getRankAbbrev(character.rank.name)}
+                      {getRankAbbrev(displayCharacter?.rank.name ?? '')}
                     </span>
                     <div class="flex-1 min-w-0">
                       <span class="font-medium text-zinc-700 dark:text-zinc-300">{e.edge.name}</span>
@@ -679,19 +1005,29 @@
 
           <!-- Powers -->
           <div class="bg-white dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 p-5">
-            <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide mb-4">
-              Powers
-              {#if character.arcane_backgrounds.length > 0}
-                <span class="text-zinc-500 dark:text-zinc-400 font-normal">
-                  ({totalPowerPoints} PP)
-                </span>
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+                Powers
+                {#if (displayCharacter?.arcane_backgrounds.length ?? 0) > 0}
+                  <span class="text-zinc-500 dark:text-zinc-400 font-normal">
+                    ({totalPowerPoints} PP)
+                  </span>
+                {/if}
+              </h3>
+              {#if editMode}
+                <button
+                  onclick={() => powerBrowserOpen = true}
+                  class="px-2 py-1 text-xs font-medium text-amber-600 hover:text-amber-500 dark:text-amber-400"
+                >
+                  Edit
+                </button>
               {/if}
-            </h3>
+            </div>
 
             <!-- Arcane Backgrounds -->
-            {#if character.arcane_backgrounds.length > 0}
+            {#if (displayCharacter?.arcane_backgrounds.length ?? 0) > 0}
               <div class="mb-4 pb-4 border-b border-zinc-200 dark:border-zinc-700">
-                {#each character.arcane_backgrounds as ab}
+                {#each displayCharacter?.arcane_backgrounds ?? [] as ab}
                   <div class="group relative cursor-help">
                     <div class="flex items-center gap-2">
                       <span class="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400">
@@ -732,9 +1068,9 @@
             {/if}
 
             <!-- Powers List -->
-            {#if character.powers.length > 0}
+            {#if (displayCharacter?.powers.length ?? 0) > 0}
               <div class="space-y-3">
-                {#each character.powers as p}
+                {#each displayCharacter?.powers ?? [] as p}
                   <div class="group relative border-b border-zinc-100 dark:border-zinc-700 pb-2 last:border-0 last:pb-0 cursor-help">
                     <div class="font-medium text-zinc-700 dark:text-zinc-300">{p.power.name}</div>
                     <div class="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
@@ -860,38 +1196,38 @@
               <div class="flex justify-between">
                 <span class="text-zinc-600 dark:text-zinc-400">Attribute Points</span>
                 <span class="font-medium text-zinc-900 dark:text-zinc-100">
-                  {character.attribute_points_spent} / {character.attribute_points_earned + character.hindrance_points_to_attributes}
+                  {displayCharacter?.attribute_points_spent ?? 0} / {(displayCharacter?.attribute_points_earned ?? 0) + (displayCharacter?.hindrance_points_to_attributes ?? 0)}
                 </span>
               </div>
               <div class="flex justify-between">
                 <span class="text-zinc-600 dark:text-zinc-400">Skill Points</span>
                 <span class="font-medium text-zinc-900 dark:text-zinc-100">
-                  {character.skill_points_spent} / {character.skill_points_earned + character.hindrance_points_to_skills}
+                  {displayCharacter?.skill_points_spent ?? 0} / {(displayCharacter?.skill_points_earned ?? 0) + (displayCharacter?.hindrance_points_to_skills ?? 0)}
                 </span>
               </div>
-              {#if character.hindrance_points_earned > 0}
+              {#if (displayCharacter?.hindrance_points_earned ?? 0) > 0}
                 <div class="flex justify-between">
                   <span class="text-zinc-600 dark:text-zinc-400">Hindrance Points</span>
                   <span class="font-medium text-amber-600 dark:text-amber-400">
-                    {character.hindrance_points_earned}
+                    {displayCharacter?.hindrance_points_earned ?? 0}
                   </span>
                 </div>
-                {#if character.hindrance_points_to_attributes > 0}
+                {#if (displayCharacter?.hindrance_points_to_attributes ?? 0) > 0}
                   <div class="flex justify-between text-xs">
                     <span class="text-zinc-500 dark:text-zinc-500 pl-2">→ Attributes</span>
-                    <span class="text-zinc-500 dark:text-zinc-500">+{character.hindrance_points_to_attributes * 2}</span>
+                    <span class="text-zinc-500 dark:text-zinc-500">+{(displayCharacter?.hindrance_points_to_attributes ?? 0) * 2}</span>
                   </div>
                 {/if}
-                {#if character.hindrance_points_to_skills > 0}
+                {#if (displayCharacter?.hindrance_points_to_skills ?? 0) > 0}
                   <div class="flex justify-between text-xs">
                     <span class="text-zinc-500 dark:text-zinc-500 pl-2">→ Skills</span>
-                    <span class="text-zinc-500 dark:text-zinc-500">+{character.hindrance_points_to_skills}</span>
+                    <span class="text-zinc-500 dark:text-zinc-500">+{displayCharacter?.hindrance_points_to_skills ?? 0}</span>
                   </div>
                 {/if}
-                {#if character.hindrance_points_to_edges > 0}
+                {#if (displayCharacter?.hindrance_points_to_edges ?? 0) > 0}
                   <div class="flex justify-between text-xs">
                     <span class="text-zinc-500 dark:text-zinc-500 pl-2">→ Edges</span>
-                    <span class="text-zinc-500 dark:text-zinc-500">+{character.hindrance_points_to_edges}</span>
+                    <span class="text-zinc-500 dark:text-zinc-500">+{displayCharacter?.hindrance_points_to_edges ?? 0}</span>
                   </div>
                 {/if}
               {/if}
@@ -899,13 +1235,13 @@
           </div>
 
           <!-- Modifiers (if any) -->
-          {#if character.modifiers.length > 0}
+          {#if (displayCharacter?.modifiers.length ?? 0) > 0}
             <div class="bg-white dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700 p-5">
               <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wide mb-4">
                 Active Modifiers
               </h3>
               <div class="space-y-2">
-                {#each character.modifiers as mod}
+                {#each displayCharacter?.modifiers ?? [] as mod}
                   <div class="text-sm text-zinc-600 dark:text-zinc-400">
                     {mod.description}
                   </div>
@@ -975,7 +1311,99 @@
   />
 {/if}
 
+<!-- Advanced Editing Confirmation Modal -->
+{#if showAdvancedEditConfirm}
+  <div
+    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    onclick={(e) => { if (e.target === e.currentTarget) showAdvancedEditConfirm = false; }}
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="bg-white dark:bg-zinc-800 rounded-lg shadow-xl max-w-md w-full p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center">
+          <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          Advanced Editing Mode
+        </h3>
+      </div>
+      <p class="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
+        Advanced editing allows you to make changes that bypass normal game rules and requirements.
+        This includes adding edges without meeting prerequisites, exceeding point limits, and other rule violations.
+        <br><br>
+        <strong class="text-amber-600 dark:text-amber-400">Use this mode carefully</strong> — it's intended for fixing mistakes or creating custom characters outside normal rules.
+      </p>
+      <div class="flex justify-end gap-3">
+        <button
+          onclick={() => showAdvancedEditConfirm = false}
+          class="px-4 py-2 text-sm font-medium rounded-md bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onclick={handleAdvancedEditConfirm}
+          class="px-4 py-2 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-400 transition-colors"
+        >
+          Enter Advanced Editing
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Edit Mode Modals -->
+{#if edgeBrowserOpen && draftCharacter}
+  <EdgeBrowserModal
+    character={draftCharacter}
+    onClose={() => edgeBrowserOpen = false}
+    onCharacterChanged={handleEditModeCharacterChanged}
+  />
+{/if}
+
+{#if hindranceBrowserOpen && draftCharacter}
+  <HindranceBrowserModal
+    character={draftCharacter}
+    onClose={() => hindranceBrowserOpen = false}
+    onCharacterChanged={handleEditModeCharacterChanged}
+  />
+{/if}
+
+{#if powerBrowserOpen && draftCharacter}
+  <PowerBrowserModal
+    character={draftCharacter}
+    onClose={() => powerBrowserOpen = false}
+    onCharacterChanged={handleEditModeCharacterChanged}
+  />
+{/if}
+
+{#if ancestryBrowserOpen && draftCharacter}
+  <AncestryBrowserModal
+    character={draftCharacter}
+    onClose={() => ancestryBrowserOpen = false}
+    onCharacterChanged={handleEditModeCharacterChanged}
+  />
+{/if}
+
 <style>
+  /* Toast animation */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateX(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+
   /* Tooltip styles */
   .tooltip {
     visibility: hidden;

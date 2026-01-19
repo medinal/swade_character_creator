@@ -53,14 +53,14 @@ export function decrementDie(die: Die): Die | null {
 /**
  * Format a die for display.
  * @param die The die to format, or null/undefined for untrained
- * @param untrained If true and die is null, returns "d4-2" instead of "—"
+ * @param untrained If true and die is null, returns "-2" instead of "—"
  */
 export function formatDie(
   die: Die | null | undefined,
   untrained: boolean = false
 ): string {
   if (!die) {
-    return untrained ? "d4-2" : "—";
+    return untrained ? "-2" : "—";
   }
   if (die.modifier > 0) {
     return `d${die.size}+${die.modifier}`;

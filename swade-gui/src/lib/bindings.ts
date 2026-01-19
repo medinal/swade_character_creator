@@ -143,9 +143,9 @@ async getHindrances() : Promise<Result<HindranceView[], CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async addDraftHindrance(hindranceId: number) : Promise<Result<CharacterView, CommandError>> {
+async addDraftHindrance(hindranceId: number, bypassValidation: boolean | null) : Promise<Result<DraftResult, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("add_draft_hindrance", { hindranceId }) };
+    return { status: "ok", data: await TAURI_INVOKE("add_draft_hindrance", { hindranceId, bypassValidation }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -167,9 +167,9 @@ async getEdges() : Promise<Result<EdgeWithAvailability[], CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async addDraftEdge(edgeId: number, notes: string | null) : Promise<Result<CharacterView, CommandError>> {
+async addDraftEdge(edgeId: number, notes: string | null, bypassValidation: boolean | null) : Promise<Result<DraftResult, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("add_draft_edge", { edgeId, notes }) };
+    return { status: "ok", data: await TAURI_INVOKE("add_draft_edge", { edgeId, notes, bypassValidation }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -199,9 +199,9 @@ async getArcaneBackgrounds() : Promise<Result<ArcaneBackgroundWithAvailability[]
     else return { status: "error", error: e  as any };
 }
 },
-async addDraftArcaneBackground(arcaneBackgroundId: number) : Promise<Result<CharacterView, CommandError>> {
+async addDraftArcaneBackground(arcaneBackgroundId: number, bypassValidation: boolean | null) : Promise<Result<DraftResult, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("add_draft_arcane_background", { arcaneBackgroundId }) };
+    return { status: "ok", data: await TAURI_INVOKE("add_draft_arcane_background", { arcaneBackgroundId, bypassValidation }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -237,9 +237,9 @@ async getPowers() : Promise<Result<PowerWithAvailability[], CommandError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async addDraftPower(powerId: number) : Promise<Result<CharacterView, CommandError>> {
+async addDraftPower(powerId: number, bypassValidation: boolean | null) : Promise<Result<DraftResult, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("add_draft_power", { powerId }) };
+    return { status: "ok", data: await TAURI_INVOKE("add_draft_power", { powerId, bypassValidation }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -264,9 +264,9 @@ async getSkills() : Promise<Result<SkillView[], CommandError>> {
 async getGameConfig() : Promise<GameConfig> {
     return await TAURI_INVOKE("get_game_config");
 },
-async updateDraftSkill(skillId: number, increment: boolean) : Promise<Result<CharacterView, CommandError>> {
+async updateDraftSkill(skillId: number, increment: boolean, bypassValidation: boolean | null) : Promise<Result<DraftResult, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("update_draft_skill", { skillId, increment }) };
+    return { status: "ok", data: await TAURI_INVOKE("update_draft_skill", { skillId, increment, bypassValidation }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -292,9 +292,9 @@ async checkSkillDecrementImpact(skillId: number) : Promise<Result<string[], Comm
     else return { status: "error", error: e  as any };
 }
 },
-async updateDraftAttribute(attributeId: number, increment: boolean) : Promise<Result<CharacterView, CommandError>> {
+async updateDraftAttribute(attributeId: number, increment: boolean, bypassValidation: boolean | null) : Promise<Result<DraftResult, CommandError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("update_draft_attribute", { attributeId, increment }) };
+    return { status: "ok", data: await TAURI_INVOKE("update_draft_attribute", { attributeId, increment, bypassValidation }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -865,6 +865,10 @@ size: number }
  */
 export type Die = { size: number; modifier: number }
 /**
+ * Result returned by draft commands that support bypass_validation.
+ */
+export type DraftResult = { character: CharacterView; warnings: ValidationWarning[] }
+/**
  * Edge category types in SWADE.
  */
 export type EdgeCategory = "Background" | "Combat" | "Leadership" | "Power" | "Professional" | "Social" | "Weird"
@@ -1087,6 +1091,10 @@ next_die: number;
  */
 effective_next_die: number; is_maxed: boolean }
 export type SkillView = { id: number; name: string; description: string; linked_attribute_id: number; is_core_skill: boolean; default_die: Die | null; max_die: Die; source: string }
+/**
+ * A warning generated when validation is bypassed.
+ */
+export type ValidationWarning = { warning_type: string; message: string }
 /**
  * View model for weapon statistics
  */

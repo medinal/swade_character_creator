@@ -180,9 +180,9 @@
     saving = true;
     error = null;
 
-    const result = await commands.addDraftEdge(edgeId, notes);
+    const result = await commands.addDraftEdge(edgeId, notes, null);
     if (result.status === "ok") {
-      character = result.data;
+      character = result.data.character;
       // Refresh edges to update availability
       const edgesResult = await commands.getEdges();
       if (edgesResult.status === "ok") {
@@ -317,6 +317,52 @@
           points. Edges with unmet requirements are grayed out.
         </p>
       </div>
+
+      <!-- Prompt to allocate hindrance points -->
+      {#if hindrancePointsAvailable > 0 && hindrancePointsToEdges === 0}
+        <div class="bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 rounded-lg p-4 mb-4">
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 mt-0.5">
+              <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h4 class="font-medium text-amber-800 dark:text-amber-300">
+                You have {hindrancePointsAvailable} hindrance point{hindrancePointsAvailable !== 1 ? 's' : ''} available!
+              </h4>
+              <p class="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                To purchase edges, first allocate your hindrance points using the highlighted card on the right.
+                Each edge costs {edgeCost} points.
+              </p>
+            </div>
+            <div class="flex-shrink-0">
+              <svg class="w-6 h-6 text-amber-500 animate-bounce-right" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      {:else if hindrancePointsEarned === 0}
+        <div class="bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 mb-4">
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0 mt-0.5">
+              <svg class="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h4 class="font-medium text-zinc-700 dark:text-zinc-300">
+                No hindrance points earned
+              </h4>
+              <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                You haven't taken any hindrances, so you don't have points to spend on edges.
+                This step is optional — you can continue to the next step.
+              </p>
+            </div>
+          </div>
+        </div>
+      {/if}
 
       <div class="space-y-4">
         {#each categoryOrder as category}
@@ -563,18 +609,19 @@
     <div>
       <div class="sticky top-24 space-y-4">
         <!-- Convert Hindrance Points to Edges -->
-        <HindrancePointsCard
-          {hindrancePointsEarned}
-          {hindrancePointsAvailable}
-          pointsAllocated={hindrancePointsToEdges}
-          targetLabel="edges"
-          description="Allocate {edgeCost} hindrance points per edge you want to purchase."
-          costPerUnit={edgeCost}
-          disabled={saving}
-          canDecrease={hindrancePointsToEdges > pointsSpentOnEdges}
-          onIncrease={addHindrancePointToEdges}
-          onDecrease={removeHindrancePointFromEdges}
-        >
+        <div class="rounded-lg transition-all duration-300 {hindrancePointsAvailable > 0 && hindrancePointsToEdges === 0 ? 'ring-2 ring-amber-400 ring-offset-2 dark:ring-offset-zinc-900 animate-pulse-subtle' : ''}">
+          <HindrancePointsCard
+            {hindrancePointsEarned}
+            {hindrancePointsAvailable}
+            pointsAllocated={hindrancePointsToEdges}
+            targetLabel="edges"
+            description="Allocate {edgeCost} hindrance points per edge you want to purchase."
+            costPerUnit={edgeCost}
+            disabled={saving}
+            canDecrease={hindrancePointsToEdges > pointsSpentOnEdges}
+            onIncrease={addHindrancePointToEdges}
+            onDecrease={removeHindrancePointFromEdges}
+          >
           {#snippet extraContent()}
             <div
               class="text-xs text-zinc-500 dark:text-zinc-400 space-y-1 border-t border-zinc-200 dark:border-zinc-700 pt-3 mt-3"
@@ -594,6 +641,7 @@
             </div>
           {/snippet}
         </HindrancePointsCard>
+        </div>
 
         <!-- Selected Edges -->
         <div
@@ -684,3 +732,31 @@
     onSubmit={handleNotesSubmit}
   />
 {/if}
+
+<style>
+  @keyframes pulse-subtle {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.85;
+    }
+  }
+
+  @keyframes bounce-right {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(4px);
+    }
+  }
+
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s ease-in-out infinite;
+  }
+
+  .animate-bounce-right {
+    animation: bounce-right 1s ease-in-out infinite;
+  }
+</style>

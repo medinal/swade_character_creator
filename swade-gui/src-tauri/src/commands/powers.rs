@@ -13,6 +13,8 @@ use tauri::State;
 use crate::error::{CommandError, CommandResult};
 use crate::state::{lock_state, AppState};
 
+use super::types::{DraftResult, ValidationWarning};
+
 /// Arcane background with its availability status for the current character.
 #[derive(serde::Serialize, specta::Type)]
 pub struct ArcaneBackgroundWithAvailability {
@@ -64,10 +66,13 @@ pub fn get_arcane_backgrounds(
 #[specta::specta]
 pub fn add_draft_arcane_background(
     arcane_background_id: i64,
+    bypass_validation: Option<bool>,
     state: State<Mutex<AppState>>,
-) -> CommandResult<CharacterView> {
+) -> CommandResult<DraftResult> {
     let mut state = lock_state(&state)?;
     let conn = state.connection()?;
+    let bypass = bypass_validation.unwrap_or(false);
+    let mut warnings = Vec::new();
 
     let draft = state.draft_mut()?;
 
@@ -87,7 +92,14 @@ pub fn add_draft_arcane_background(
     // Check requirements
     let ctx = draft.to_requirement_context();
     if !arcane_background.requirements.evaluate(&ctx) {
-        return Err(CommandError::Validation("Character does not meet arcane background requirements".to_string()));
+        if bypass {
+            warnings.push(ValidationWarning::requirement_not_met(format!(
+                "Arcane Background '{}' requirements not met",
+                arcane_background.name
+            )));
+        } else {
+            return Err(CommandError::Validation("Character does not meet arcane background requirements".to_string()));
+        }
     }
 
     // Initialize arcane_background_choices from the AB's choices
@@ -152,7 +164,7 @@ pub fn add_draft_arcane_background(
     // Add the starting power points
     draft.power_points += arcane_background.starting_power_points;
 
-    Ok(draft.clone())
+    Ok(DraftResult::with_warnings(draft.clone(), warnings))
 }
 
 #[tauri::command]
@@ -396,10 +408,13 @@ pub fn get_powers(state: State<Mutex<AppState>>) -> CommandResult<Vec<PowerWithA
 #[specta::specta]
 pub fn add_draft_power(
     power_id: i64,
+    bypass_validation: Option<bool>,
     state: State<Mutex<AppState>>,
-) -> CommandResult<CharacterView> {
+) -> CommandResult<DraftResult> {
     let mut state = lock_state(&state)?;
     let conn = state.connection()?;
+    let bypass = bypass_validation.unwrap_or(false);
+    let mut warnings = Vec::new();
 
     let draft = state.draft_mut()?;
 
@@ -410,7 +425,13 @@ pub fn add_draft_power(
 
     // Check if character has an arcane background
     if draft.arcane_backgrounds.is_empty() {
-        return Err(CommandError::Validation("Character must have an Arcane Background to select powers".to_string()));
+        if bypass {
+            warnings.push(ValidationWarning::requirement_not_met(
+                "Character has no Arcane Background".to_string(),
+            ));
+        } else {
+            return Err(CommandError::Validation("Character must have an Arcane Background to select powers".to_string()));
+        }
     }
 
     // Check if the arcane background has a power list restriction
@@ -419,7 +440,7 @@ pub fn add_draft_power(
         .iter()
         .any(|ab| ab.arcane_background.has_power_list);
 
-    if has_power_list {
+    if has_power_list && !bypass {
         // Validate that the power is in the available_power choices
         let available_power_ids: Vec<i64> = draft
             .arcane_background_choices
@@ -458,10 +479,18 @@ pub fn add_draft_power(
     let current_power_count = draft.powers.len() as i64;
 
     if current_power_count >= total_starting_powers {
-        return Err(CommandError::Validation(format!(
-            "Cannot add more powers. You have {} of {} starting powers.",
-            current_power_count, total_starting_powers
-        )));
+        if bypass {
+            warnings.push(ValidationWarning::slot_limit_exceeded(format!(
+                "Power slots exceeded ({}/{})",
+                current_power_count + 1,
+                total_starting_powers
+            )));
+        } else {
+            return Err(CommandError::Validation(format!(
+                "Cannot add more powers. You have {} of {} starting powers.",
+                current_power_count, total_starting_powers
+            )));
+        }
     }
 
     // Load the power
@@ -471,13 +500,20 @@ pub fn add_draft_power(
     // Check requirements
     let ctx = draft.to_requirement_context();
     if !power.requirements.evaluate(&ctx) {
-        return Err(CommandError::Validation("Character does not meet power requirements".to_string()));
+        if bypass {
+            warnings.push(ValidationWarning::requirement_not_met(format!(
+                "Power '{}' requirements not met",
+                power.name
+            )));
+        } else {
+            return Err(CommandError::Validation("Character does not meet power requirements".to_string()));
+        }
     }
 
     // Add the power (advance_taken is None for character creation/starting powers)
     draft.powers.push(CharacterPowerValue::new(power, None));
 
-    Ok(draft.clone())
+    Ok(DraftResult::with_warnings(draft.clone(), warnings))
 }
 
 #[tauri::command]
