@@ -655,6 +655,13 @@
                 How much damage the character can take. Equal to 2 + half Vigor die (+ armor).
               </span>
             </div>
+            <div class="text-center group relative cursor-help">
+              <div class="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1">Size</div>
+              <div class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{displayCharacter?.derived_stats.size ?? 0}</div>
+              <span class="tooltip">
+                Size modifier affecting Toughness. Normal humans are 0. Can range from -1 (small) to +3 or more (large).
+              </span>
+            </div>
             <div class="text-center group relative">
               <div class="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1">Wealth</div>
               {#if editingWealth}
