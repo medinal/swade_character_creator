@@ -564,6 +564,19 @@ async getAdvancementHistory(characterId: number) : Promise<Result<CharacterAdvan
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Export a character as a markdown file.
+ * Shows a save dialog and writes the file to the chosen location.
+ * Returns true if the file was saved, false if the user cancelled.
+ */
+async exportCharacterMarkdown(id: number) : Promise<Result<boolean, CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_character_markdown", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 

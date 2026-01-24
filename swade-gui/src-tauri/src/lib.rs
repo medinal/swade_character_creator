@@ -79,6 +79,8 @@ use commands::{
     take_hindrance_advance,
     undo_last_advance,
     get_advancement_history,
+    // Export
+    export_character_markdown,
     // Types (for TypeScript bindings)
     DraftResult,
     ValidationWarning,
@@ -158,7 +160,9 @@ pub fn run() {
             take_cheap_skill_advance,
             take_hindrance_advance,
             undo_last_advance,
-            get_advancement_history
+            get_advancement_history,
+            // Export
+            export_character_markdown
         ]);
 
     #[cfg(debug_assertions)]
@@ -177,6 +181,7 @@ pub fn run() {
     });
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(builder.invoke_handler())
         .manage(app_state)
         .setup(move |app| {
