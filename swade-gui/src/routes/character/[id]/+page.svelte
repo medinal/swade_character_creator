@@ -71,6 +71,8 @@
     if (result.status === "ok") {
       if (result.data) {
         character = result.data;
+        // Load power requirement statuses
+        await loadPowerRequirementStatuses(id);
       } else {
         error = "Character not found";
       }
@@ -175,6 +177,10 @@
       editMode = false;
       draftCharacter = null;
       toasts = [];
+      // Reload power requirement statuses
+      if (result.data.id) {
+        await loadPowerRequirementStatuses(result.data.id);
+      }
     } else {
       error = result.error.message;
     }
@@ -256,7 +262,9 @@
   let editing = $state(false);
   let hideUntrainedSkills = $state(false);
   let ancestryExpanded = $state(false);
+  let expandedPower = $state<number | null>(null);
   let powerPointsUsed = $state(0);
+  let powerRequirementStatuses = $state<Map<number, Array<{ description: string; is_met: boolean }>>>(new Map());
   let wounds = $state(0); // 0-4 (4 = incapacitated)
   let fatigue = $state(0); // 0-3 (3 = incapacitated)
   let benniesAvailable = $state(3); // Start with 3, can earn up to 6
@@ -353,6 +361,28 @@
     }
   }
 
+  function togglePowerExpand(powerId: number) {
+    expandedPower = expandedPower === powerId ? null : powerId;
+  }
+
+  // Helper function to load power requirement statuses
+  async function loadPowerRequirementStatuses(characterId: number) {
+    try {
+      const reqResult = await (commands as any).evaluateCharacterPowerRequirements(characterId);
+      if (reqResult.status === "ok" && reqResult.data) {
+        const statusMap = new Map<number, Array<{ description: string; is_met: boolean }>>();
+        reqResult.data.forEach((item: { power_id: number; requirement_statuses: Array<{ description: string; is_met: boolean }> }) => {
+          statusMap.set(item.power_id, item.requirement_statuses);
+        });
+        powerRequirementStatuses = statusMap;
+      }
+      // Silently ignore errors - requirement statuses are nice-to-have, not critical
+    } catch (e) {
+      // Silently fail - requirement statuses are optional
+      console.warn("Failed to load power requirement statuses:", e);
+    }
+  }
+
   async function handleEdit() {
     if (!character) return;
     editing = true;
@@ -390,10 +420,14 @@
     }
   }
 
-  function handleAdvanceTaken(updatedCharacter: CharacterView) {
+  async function handleAdvanceTaken(updatedCharacter: CharacterView) {
     character = updatedCharacter;
     notes = updatedCharacter.notes;
     advancementHistoryKey++; // Trigger history refresh
+    // Reload power requirement statuses
+    if (updatedCharacter.id) {
+      await loadPowerRequirementStatuses(updatedCharacter.id);
+    }
   }
 
   // Gear handlers
@@ -1100,18 +1134,89 @@
             {#if (displayCharacter?.powers.length ?? 0) > 0}
               <div class="space-y-3">
                 {#each displayCharacter?.powers ?? [] as p}
-                  <div class="group relative border-b border-zinc-100 dark:border-zinc-700 pb-2 last:border-0 last:pb-0 cursor-help">
-                    <div class="font-medium text-zinc-700 dark:text-zinc-300">{p.power.name}</div>
-                    <div class="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                      <span>PP: {p.power.power_points}</span>
-                      <span class="mx-2">•</span>
-                      <span>Range: {p.power.range}</span>
-                      <span class="mx-2">•</span>
-                      <span>Duration: {p.power.duration}</span>
-                    </div>
-                    <span class="tooltip">
-                      {p.power.description}
-                    </span>
+                  {@const isExpanded = expandedPower === p.power.id}
+                  <div class="border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden">
+                    <button
+                      onclick={() => togglePowerExpand(p.power.id)}
+                      class="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-zinc-50 dark:hover:bg-zinc-700/50 transition-colors"
+                    >
+                      <div class="flex-1 min-w-0">
+                        <div class="font-medium text-zinc-700 dark:text-zinc-300">{p.power.name}</div>
+                        <div class="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                          <span>PP: {p.power.power_points}</span>
+                          <span class="mx-2">•</span>
+                          <span>Range: {p.power.range}</span>
+                          <span class="mx-2">•</span>
+                          <span>Duration: {p.power.duration}</span>
+                        </div>
+                      </div>
+                      <svg
+                        class="w-4 h-4 text-zinc-400 transition-transform flex-shrink-0 ml-2 {isExpanded ? 'rotate-180' : ''}"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {#if isExpanded}
+                      {@const reqStatuses = powerRequirementStatuses.get(p.power.id) ?? []}
+                      <div class="px-4 pb-4 border-t border-zinc-100 dark:border-zinc-800">
+                        <!-- Requirements -->
+                        {#if reqStatuses.length > 0}
+                          <div class="mt-3 mb-3">
+                            <span class="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                              Requirements:
+                            </span>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                              {#each reqStatuses as req}
+                                <span
+                                  class="px-2 py-0.5 text-xs rounded {req.is_met
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
+                                    : 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400'}"
+                                >
+                                  {#if req.is_met}
+                                    <span class="mr-1">✓</span>
+                                  {:else}
+                                    <span class="mr-1">✗</span>
+                                  {/if}
+                                  {req.description}
+                                </span>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+
+                        <!-- Power Stats -->
+                        <div class="text-xs text-zinc-500 dark:text-zinc-400 space-y-1 mb-3">
+                          <div class="flex gap-4">
+                            <span><strong>Range:</strong> {p.power.range}</span>
+                            <span><strong>Duration:</strong> {p.power.duration}</span>
+                            <span><strong>Cost:</strong> {p.power.power_points} PP</span>
+                          </div>
+                        </div>
+
+                        <!-- Description -->
+                        <p class="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
+                          {p.power.description}
+                        </p>
+
+                        <!-- Effects (Modifiers) -->
+                        {#if p.power.modifiers.length > 0}
+                          <div class="mb-4">
+                            <span class="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                              Effects:
+                            </span>
+                            <ul class="mt-1 text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
+                              {#each p.power.modifiers as mod}
+                                <li>• {mod.description}</li>
+                              {/each}
+                            </ul>
+                          </div>
+                        {/if}
+                      </div>
+                    {/if}
                   </div>
                 {/each}
               </div>

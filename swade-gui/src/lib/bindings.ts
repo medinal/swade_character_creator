@@ -111,6 +111,17 @@ async clearCharacterPortrait(id: number) : Promise<Result<CharacterView, Command
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Evaluate requirements for all powers a character has.
+ */
+async evaluateCharacterPowerRequirements(id: number) : Promise<Result<PowerRequirementResult[], CommandError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("evaluate_character_power_requirements", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getAncestries() : Promise<Result<AncestryView[], CommandError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_ancestries") };
@@ -1030,6 +1041,10 @@ notes: string | null }
  * View model for poison statistics
  */
 export type PoisonStatsView = { poison_type: string; delivery_method: string; affected_attribute: string | null; notes: string | null }
+/**
+ * Power requirement evaluation result.
+ */
+export type PowerRequirementResult = { power_id: number; requirement_statuses: RequirementStatus[] }
 export type PowerView = { id: number; name: string; power_points: number; range: string; duration: string; source: string; description: string; modifiers: Modifier[]; requirements: RequirementTree }
 /**
  * Power with its availability status for the current character.
