@@ -22,6 +22,7 @@ use commands::{
     update_character_status,
     update_character_portrait,
     clear_character_portrait,
+    evaluate_character_power_requirements,
     // Ancestry
     get_ancestries,
     update_draft_ancestry,
@@ -104,6 +105,7 @@ pub fn run() {
             update_character_status,
             update_character_portrait,
             clear_character_portrait,
+            evaluate_character_power_requirements,
             // Ancestry
             get_ancestries,
             update_draft_ancestry,

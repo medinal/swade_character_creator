@@ -4,7 +4,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use std::sync::Mutex;
 use swade_core::repositories::CharacterRepository;
 use swade_core::services::CharacterService;
-use swade_core::views::CharacterView;
+use swade_core::views::{CharacterView, RequirementStatus};
 use tauri::State;
 
 use crate::error::{CommandError, CommandResult};
@@ -209,4 +209,38 @@ pub fn delete_character(
     CharacterRepository::delete(&conn, id)?;
 
     Ok(())
+}
+
+/// Power requirement evaluation result.
+#[derive(serde::Serialize, specta::Type)]
+pub struct PowerRequirementResult {
+    pub power_id: i64,
+    pub requirement_statuses: Vec<RequirementStatus>,
+}
+
+/// Evaluate requirements for all powers a character has.
+#[tauri::command]
+#[specta::specta]
+pub fn evaluate_character_power_requirements(
+    id: i64,
+    state: State<Mutex<AppState>>,
+) -> CommandResult<Vec<PowerRequirementResult>> {
+    let state = lock_state(&state)?;
+    let conn = state.connection()?;
+    
+    let character = CharacterService::get_by_id(&conn, id)?
+        .ok_or_else(|| CommandError::NotFound("Character not found".to_string()))?;
+    
+    let ctx = character.to_requirement_context();
+    let mut result = Vec::new();
+    
+    for power_value in &character.powers {
+        let requirement_statuses = power_value.power.requirements.evaluate_detailed(&ctx);
+        result.push(PowerRequirementResult {
+            power_id: power_value.power.id,
+            requirement_statuses,
+        });
+    }
+    
+    Ok(result)
 }
